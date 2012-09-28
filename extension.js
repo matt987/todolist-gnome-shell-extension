@@ -21,6 +21,7 @@ const _ = Gettext.domain('todolist').gettext;
 function TasksManager(metadata)
 {	
 	this.file = metadata.path + "/list.tasks";
+	this.outputfile = metadata.path + "/old.tasks";
 
 	let locales = metadata.path + "/locale";
 	Gettext.bindtextdomain('todolist', locales);
@@ -48,6 +49,7 @@ TasksManager.prototype =
 	_refresh: function()
 	{    		
 		let varFile = this.file;
+		let outputFile = this.outputfile
 		let tasksMenu = this.menu;
 		let buttonText = this.buttonText;
 
@@ -71,7 +73,7 @@ TasksManager.prototype =
 					let textClicked = lines[i];
 					item.connect('activate', function(){
 						buttonText.set_text(_("(...)"));
-						removeTask(textClicked,varFile);
+						removeTask(textClicked,varFile, outputFile);
 					});
 					tasksMenu.addMenuItem(item);
 					
@@ -141,14 +143,16 @@ TasksManager.prototype =
 }
 
 // Remove task "text" from file "file"
-function removeTask(text,file)
+function removeTask(text,file, outputfile)
 {
 	if (GLib.file_test(file, GLib.FileTest.EXISTS))
 	{
 		let content = Shell.get_file_contents_utf8_sync(file);
+		let oldcontent = Shell.get_file_contents_utf8_sync(outputfile);
 		let tasks = content.toString().split('\n');
 		let newText = "#tasks";
-		
+		let date = new Date();
+		let months = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec",]
 		for (let i=0; i<tasks.length; i++)
 		{
 			// if not corresponding
@@ -160,10 +164,23 @@ function removeTask(text,file)
 					newText += tasks[i];
 				}
 			}
+			else
+			{
+				if(tasks[i][0] != '#')
+				{
+					if(oldcontent === "")
+					{
+						oldcontent = "#tasks"
+					}
+					oldcontent += "\n";
+					oldcontent += "(" + months[date.getMonth()] + "-" + date.getDate() + "-" + date.getFullYear() + " ";
+					oldcontent += date.getHours() + ":" + date.getMinutes() + ") "
+					oldcontent += tasks[i];
+				}
+			}
 		}
-		let f = Gio.file_new_for_path(file);
-		let out = f.replace(null, false, Gio.FileCreateFlags.NONE, null);
-		Shell.write_string_to_stream (out, newText);
+		writeFile(file, newText);
+		writeFile(outputfile, oldcontent)
 	}
 	else 
 	{ global.logError("Todo list : Error while reading file : " + file); }
@@ -177,12 +194,17 @@ function addTask(text,file)
 		let content = Shell.get_file_contents_utf8_sync(file);
 		content = content + text + "\n";
 		
-		let f = Gio.file_new_for_path(file);
-		let out = f.replace(null, false, Gio.FileCreateFlags.NONE, null);
-		Shell.write_string_to_stream (out, content);
-	}
+		writeFile(file, content)	}
 	else 
 	{ global.logError("Todo list : Error while reading file : " + file); }
+}
+
+//Write a file
+function writeFile(file,content)
+{
+	let f = Gio.file_new_for_path(file);
+	let out = f.replace(null, false, Gio.FileCreateFlags.NONE, null);
+	Shell.write_string_to_stream (out, content);
 }
 
 // Init function
